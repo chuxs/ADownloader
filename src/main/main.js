@@ -10,6 +10,7 @@ import { ExtractionManager } from '../extraction/ExtractionManager.js';
 import { LinkGrabber } from '../grabber/LinkGrabber.js';
 import { extractUrlsFromText } from '../plugins/html.js';
 import { PluginRegistry } from '../plugins/PluginRegistry.js';
+import { QUALITY_OPTIONS } from '../plugins/quality.js';
 import { Tools } from '../tools/Tools.js';
 import { Settings } from './Settings.js';
 
@@ -96,6 +97,8 @@ async function createCore() {
     splitFolders: false,
     splitFolderBase: '',
     splitFolderLimit: 15,
+    multiQuality: false,
+    videoQualities: ['1080', '720'],
   });
   await settings.load();
   const folders = new FolderSplitter(({ full, next, limit }) =>
@@ -117,7 +120,15 @@ async function createCore() {
 
   const tools = new Tools(path.join(dataDir, 'tools'));
   await tools.refresh();
-  const registry = PluginRegistry.withBuiltins(tools);
+  // Read on every link check, so changing the setting applies to the next links added.
+  const qualityPrefs = () => {
+    const list = settings.get('videoQualities');
+    return {
+      multiple: settings.get('multiQuality'),
+      list: Array.isArray(list) ? list.filter((q) => QUALITY_OPTIONS.includes(q)) : [],
+    };
+  };
+  const registry = PluginRegistry.withBuiltins(tools, qualityPrefs);
   const list = new DownloadList({ file: path.join(dataDir, 'downloadlist.json') });
   await list.load();
   const extraction = new ExtractionManager(list, tools, pick(settings.values, EXTRACTION_KEYS));
@@ -466,6 +477,15 @@ async function captureTabs(win, dir) {
     const image = await win.webContents.capturePage();
     await writeFile(path.join(dir, `${tab}.png`), image.toPNG());
   }
+  // Video quality settings: turn on several qualities and show the choices.
+  await win.webContents.executeJavaScript(`(() => {
+    document.querySelector('[data-tab=settings]').click();
+    const box = document.querySelector('input[aria-label="Download several qualities of each video"]');
+    box.click();
+    box.closest('.card').scrollIntoView();
+  })()`);
+  await wait(700);
+  await shot('settings-quality.png');
   // Hover preview of the first thumbnail.
   const hasThumb = await win.webContents.executeJavaScript(`(() => {
     document.querySelector('[data-tab=downloads]').click();

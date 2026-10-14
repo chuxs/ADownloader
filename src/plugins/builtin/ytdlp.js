@@ -8,6 +8,7 @@ import { DownloadError } from '../../engine/errors.js';
 import { sanitizeFileName, uniquePath } from '../../engine/filename.js';
 import { killTree, run, start } from '../../tools/process.js';
 import { PluginError } from '../PluginError.js';
+import { BEST_ONLY, nameWithQuality, tierOf } from '../quality.js';
 
 const COMMON_ARGS = ['--ignore-config', '--no-warnings', '--no-playlist'];
 
@@ -87,13 +88,117 @@ export function videoSize(info) {
   return { size: Math.round(total), sizeApprox: approx };
 }
 
+function formatSize(f, duration) {
+  if (f.filesize) return { size: f.filesize, approx: false };
+  const kbps = f.tbr ?? ((f.vbr ?? 0) + (f.abr ?? 0) || null);
+  const size = f.filesize_approx ?? (kbps && duration ? (kbps * 1000 * duration) / 8 : null);
+  return { size, approx: true };
+}
+
+const isH264 = (f) => /^(avc|h264)/i.test(f.vcodec ?? '');
+
+/**
+ * One download per wanted quality that the video actually offers.
+ * Each variant carries the yt-dlp format to request, e.g. "137+ba/137/...".
+ *
+ * @param {object} info yt-dlp JSON for one video
+ * @param {string[]} wanted e.g. ['1080', '720', 'audio']
+ * @param {boolean} hasFfmpeg joining separate video+audio (and audio conversion) needs ffmpeg
+ * @returns {Array<{quality: string, format: string, audioOnly: boolean, ext: string, size: number|null, sizeApprox: boolean}>}
+ */
+export function qualityVariants(info, wanted, hasFfmpeg) {
+  const formats = info.formats ?? [];
+  const duration = info.duration;
+  const audios = formats
+    .filter((f) => f.vcodec === 'none' && f.acodec && f.acodec !== 'none')
+    .sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0));
+  const bestAudio = audios[0];
+  const hasAudio = (f) => f.acodec && f.acodec !== 'none';
+
+  // Best video format of each quality level.
+  const byTier = new Map();
+  for (const f of formats) {
+    if (!f.vcodec || f.vcodec === 'none' || !(f.height || f.width)) continue;
+    if (!hasFfmpeg && !hasAudio(f)) continue; // can't add the audio without ffmpeg
+    const tier = tierOf(f.width, f.height);
+    const cur = byTier.get(tier);
+    const better =
+      !cur ||
+      (f.height ?? 0) * (f.width ?? 0) - (cur.height ?? 0) * (cur.width ?? 0) ||
+      (f.fps ?? 0) - (cur.fps ?? 0) ||
+      isH264(f) - isH264(cur) ||
+      (f.tbr ?? 0) - (cur.tbr ?? 0);
+    if (better === true || better > 0) byTier.set(tier, f);
+  }
+
+  const out = [];
+  for (const q of wanted) {
+    if (q === 'audio') {
+      if (!bestAudio && !formats.length) continue;
+      const s = formatSize(bestAudio ?? formats.at(-1), duration);
+      out.push({
+        quality: 'audio',
+        format: hasFfmpeg ? 'ba/b' : 'ba[ext=m4a]/ba/b',
+        audioOnly: true,
+        ext: hasFfmpeg ? 'mp3' : 'm4a',
+        size: s.size ? Math.round(s.size) : null,
+        sizeApprox: true, // converted to mp3 or picked at download time
+      });
+      continue;
+    }
+    const f = byTier.get(q);
+    if (!f) continue; // the video doesn't come in this quality
+    const v = formatSize(f, duration);
+    const a = !hasAudio(f) && bestAudio ? formatSize(bestAudio, duration) : { size: 0, approx: false };
+    const size = v.size != null && a.size != null ? Math.round(v.size + a.size) : null;
+    // Exact format first; if the site changed it, the best of that height instead.
+    const h = Math.round(Number(q) * 1.15);
+    const exact = hasAudio(f) ? f.format_id : `${f.format_id}+ba/${f.format_id}`;
+    const fallback = hasFfmpeg ? `bv*[height<=${h}]+ba/b[height<=${h}]` : `b[height<=${h}]`;
+    out.push({
+      quality: q,
+      format: `${exact}/${fallback}`,
+      audioOnly: false,
+      ext: hasFfmpeg ? 'mp4' : (f.ext ?? 'mp4'),
+      size,
+      sizeApprox: v.approx || a.approx,
+    });
+  }
+  return out;
+}
+
 /**
  * Plugin for video sites, backed by yt-dlp (https://github.com/yt-dlp/yt-dlp),
  * which supports well over a thousand sites. Only active when yt-dlp is installed.
  * @param {import('../../tools/Tools.js').Tools} tools
+ * @param {() => import('../quality.js').QualityPrefs} [prefs] which qualities to offer
  * @returns {import('../PluginRegistry.js').Plugin & {available(): boolean}}
  */
-export function createYtDlpPlugin(tools) {
+export function createYtDlpPlugin(tools, prefs = () => BEST_ONLY) {
+  /** The links for one video: one per wanted quality, or just the best. */
+  const linksFor = (info, url) => {
+    const base = {
+      url: info.webpage_url ?? url,
+      packageName: info.title ?? undefined,
+      thumbnail: thumbnailOf(info),
+      pluginId: 'ytdlp',
+    };
+    const p = prefs();
+    if (p.multiple && p.list.length) {
+      const variants = qualityVariants(info, p.list, Boolean(tools.ffmpeg));
+      if (variants.length) {
+        return variants.map((v) => ({
+          ...base,
+          name: nameWithQuality(videoName(info, true), v.quality, v.ext),
+          size: v.size,
+          sizeApprox: v.sizeApprox,
+          data: { format: v.format, audioOnly: v.audioOnly, quality: v.quality },
+        }));
+      }
+    }
+    return [{ ...base, name: videoName(info, Boolean(tools.ffmpeg)), ...videoSize(info) }];
+  };
+
   return {
     id: 'ytdlp',
     name: 'Video sites (yt-dlp)',
@@ -116,23 +221,19 @@ export function createYtDlpPlugin(tools) {
             pluginId: 'ytdlp',
           }));
       }
-      return [
-        {
-          url: info.webpage_url ?? url,
-          name: videoName(info, Boolean(tools.ffmpeg)),
-          ...videoSize(info),
-          packageName: info.title ?? undefined,
-          thumbnail: thumbnailOf(info),
-          pluginId: 'ytdlp',
-          checked: true,
-        },
-      ];
+      return linksFor(info, url).map((l) => ({ ...l, checked: true }));
     },
 
+    /** Playlist entries are checked one by one; several qualities come back as variants. */
     async check(link, ctx) {
       if (!tools.ytdlp) throw new PluginError('TEMPORARY', 'yt-dlp is not installed (Settings → Video sites)');
+      if (link.data?.format) return { available: true }; // already one specific quality
       const info = await ytdlpInfo(tools.ytdlp, link.url, { signal: ctx.signal, ffmpeg: tools.ffmpeg });
-      return { available: true, name: videoName(info, Boolean(tools.ffmpeg)), ...videoSize(info), thumbnail: thumbnailOf(info) };
+      const links = linksFor(info, link.url);
+      if (links.length > 1 || links[0].data) {
+        return { available: true, thumbnail: thumbnailOf(info), variants: links };
+      }
+      return { available: true, name: links[0].name, size: links[0].size, sizeApprox: links[0].sizeApprox, thumbnail: thumbnailOf(info) };
     },
 
     createDownload(link, opts) {
@@ -143,6 +244,8 @@ export function createYtDlpPlugin(tools) {
         url: link.url,
         name: link.name,
         expectedSize: link.size,
+        format: link.data?.format,
+        audioOnly: link.data?.audioOnly,
         ...opts,
       });
     },
@@ -169,7 +272,8 @@ export class YtDlpDownload extends EventEmitter {
   /**
    * @param {{ytdlp: string, ffmpeg?: string|null, url: string, name?: string, directory?: string,
    *          fileName?: string, filePath?: string, connections?: number, limiters?: Array<{rate?: number}>,
-   *          expectedSize?: number|null}} opts
+   *          expectedSize?: number|null, format?: string, audioOnly?: boolean}} opts
+   *        format: yt-dlp format for one specific quality (default: best)
    */
   constructor(opts) {
     super();
@@ -296,8 +400,14 @@ export class YtDlpDownload extends EventEmitter {
       '-o',
       this.#template,
     ];
-    args.push(...formatArgs(o.ffmpeg));
-    if (o.ffmpeg) args.push('--ffmpeg-location', o.ffmpeg, '--merge-output-format', 'mp4');
+    if (o.format) args.push('-f', o.format, '-S', 'vcodec:h264,acodec:aac');
+    else args.push(...formatArgs(o.ffmpeg));
+    if (o.ffmpeg) args.push('--ffmpeg-location', o.ffmpeg);
+    if (o.audioOnly) {
+      if (o.ffmpeg) args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
+    } else if (o.ffmpeg) {
+      args.push('--merge-output-format', 'mp4');
+    }
     const rate = o.limiters?.find((l) => l.rate > 0)?.rate;
     if (rate) args.push('--limit-rate', String(rate));
     args.push(o.url);

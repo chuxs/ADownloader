@@ -239,6 +239,10 @@ export class LinkGrabber extends EventEmitter {
     const ctx = PluginRegistry.context(this.#controller.signal);
     try {
       const r = await plugin.check(link, ctx);
+      if (r.available && r.variants?.length) {
+        this.#replaceWithVariants(link, r);
+        return;
+      }
       link.status = r.available ? 'online' : 'offline';
       link.error = r.available ? null : (r.error ?? 'File not found');
       if (r.name) link.name = r.name;
@@ -253,6 +257,29 @@ export class LinkGrabber extends EventEmitter {
       link.status = e.code === 'OFFLINE' ? 'offline' : 'unchecked';
       link.error = e.message;
     }
+    this.#changed();
+  }
+
+  /** One link becomes several (e.g. one per video quality), in the same place. */
+  #replaceWithVariants(link, result) {
+    const pkg = this.#packages.find((p) => p.id === link.packageId);
+    if (!pkg) return;
+    const index = pkg.links.indexOf(link);
+    if (index < 0) return; // removed while being checked
+    const variants = result.variants.map((v) => ({
+      ...link,
+      id: randomUUID(),
+      url: v.url ?? link.url,
+      name: v.name ?? link.name,
+      size: v.size ?? null,
+      sizeApprox: Boolean(v.sizeApprox),
+      data: v.data,
+      thumbnail: link.thumbnail ?? v.thumbnail ?? result.thumbnail ?? null,
+      thumbKey: link.thumbKey ?? null,
+      status: 'online',
+      error: null,
+    }));
+    pkg.links.splice(index, 1, ...variants);
     this.#changed();
   }
 

@@ -9,7 +9,7 @@ import { DownloadState } from './Download.js';
 import { DownloadError, statusError, toDownloadError } from './errors.js';
 import { remuxToMp4 } from './ffmpeg.js';
 import { fileNameFromUrl, sanitizeFileName, uniquePath } from './filename.js';
-import { bestVariant, parsePlaylist, sequenceIv } from './m3u8.js';
+import { bestVariant, closestVariant, parsePlaylist, sequenceIv } from './m3u8.js';
 import { SpeedMeter } from './SpeedMeter.js';
 
 const DEFAULTS = {
@@ -60,6 +60,7 @@ export class HlsDownload extends EventEmitter {
    * @param {Record<string,string>} [opts.headers]
    * @param {number} [opts.connections]    segments downloaded in parallel
    * @param {Array<{consume(n: number, s: AbortSignal): Promise<void>}>} [opts.limiters]
+   * @param {{width?: number, height?: number, bandwidth?: number}} [opts.variant] a specific quality (default: best)
    */
   constructor(opts) {
     super();
@@ -187,7 +188,7 @@ export class HlsDownload extends EventEmitter {
     let video = parsePlaylist(first.text, first.url);
     let audio = null;
     if (video.type === 'master') {
-      const variant = bestVariant(video.variants);
+      const variant = this.#opts.variant ? closestVariant(video.variants, this.#opts.variant) : bestVariant(video.variants);
       if (!variant) throw new DownloadError('EMPTY_PLAYLIST', 'No video streams found');
       // Separate audio track for this variant, if the playlist declares one with its own URI.
       const rendition = variant.audio

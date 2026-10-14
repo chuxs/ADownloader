@@ -40,7 +40,9 @@ import { createYtDlpPlugin } from './builtin/ytdlp.js';
  * @property {object} [data]      plugin-private data saved with the link
  *
  * @typedef {{url: string, name?: string, size?: number|null, headers?: Record<string,string>, data?: object}} PluginLink
- * @typedef {{available: boolean, name?: string, size?: number|null, sizeApprox?: boolean, thumbnail?: string, error?: string}} CheckResult
+ * @typedef {{available: boolean, name?: string, size?: number|null, sizeApprox?: boolean, thumbnail?: string, error?: string,
+ *            variants?: CrawlResult[]}} CheckResult
+ *   variants: the link stands for several downloads (e.g. one per video quality); it is replaced by them
  * @typedef {{url: string, name?: string, headers?: Record<string,string>, type?: 'hls'}} ResolveResult
  *   type 'hls': the URL is a stream playlist, downloaded by the HLS plugin
  * @typedef {{http: Browser, signal: AbortSignal|undefined, log: (...args: unknown[]) => void}} PluginContext
@@ -53,12 +55,13 @@ export class PluginRegistry {
   /**
    * Registry with the built-in plugins.
    * @param {import('../tools/Tools.js').Tools} [tools] enables yt-dlp video sites and ffmpeg for streams
+   * @param {() => import('./quality.js').QualityPrefs} [qualityPrefs] which video qualities to offer
    */
-  static withBuiltins(tools = null) {
+  static withBuiltins(tools = null, qualityPrefs = undefined) {
     const r = new PluginRegistry();
     for (const p of fileHosts) r.register(p);
-    r.register(createHlsPlugin(tools ?? { ffmpeg: null }));
-    r.register(createYtDlpPlugin(tools ?? { ytdlp: null, ffmpeg: null }));
+    r.register(createHlsPlugin(tools ?? { ffmpeg: null }, qualityPrefs));
+    r.register(createYtDlpPlugin(tools ?? { ytdlp: null, ffmpeg: null }, qualityPrefs));
     r.register(directHttp);
     r.register(genericPage);
     return r;

@@ -48,6 +48,28 @@ const SECTIONS = [
         title: 'Use yt-dlp for video sites',
         hint: 'Free, open-source tool that supports YouTube, Vimeo and well over a thousand other sites. Installed and updated automatically.',
       },
+      {
+        key: 'multiQuality',
+        kind: 'toggle',
+        title: 'Download several qualities of each video',
+        hint: 'Off: one file per video in the best quality (HD). On: one file for each quality ticked below that the video offers.',
+      },
+      {
+        key: 'videoQualities',
+        kind: 'checks',
+        title: 'Qualities',
+        hint: 'Applies to links added after changing this',
+        options: [
+          ['2160', '4K'],
+          ['1440', '1440p'],
+          ['1080', '1080p'],
+          ['720', '720p'],
+          ['480', '480p'],
+          ['360', '360p'],
+          ['audio', 'Audio (MP3)'],
+        ],
+        dependsOn: 'multiQuality',
+      },
       { key: 'ytdlp', kind: 'tool', title: 'yt-dlp' },
       { key: 'ffmpeg', kind: 'tool', title: 'ffmpeg', hint: 'Joins video and audio, converts streams to .mp4' },
     ],
@@ -89,6 +111,10 @@ export class SettingsView {
       }
       if (document.activeElement === input) continue; // don't overwrite while typing
       const v = state.settings[key];
+      if (field.kind === 'checks') {
+        for (const box of input.querySelectorAll('input')) box.checked = v.includes(box.value);
+        continue;
+      }
       if (field.kind === 'toggle') input.checked = v;
       else input.value = field.toView ? field.toView(v) : v;
     }
@@ -152,6 +178,22 @@ export class SettingsView {
         call('settings:set', { [field.key]: field.fromView ? field.fromView(v) : v });
       });
       row.append(input, h('span.unit', {}, field.unit ?? ''));
+    } else if (field.kind === 'checks') {
+      row.classList.add('stacked');
+      input = h('div.checks', { role: 'group', 'aria-label': field.title });
+      for (const [value, label] of field.options) {
+        const box = h('input', { type: 'checkbox', value });
+        box.addEventListener('change', () => {
+          const picked = [...input.querySelectorAll('input:checked')].map((b) => b.value);
+          if (picked.length === 0) {
+            box.checked = true; // keep at least one quality
+            return;
+          }
+          call('settings:set', { [field.key]: picked });
+        });
+        input.append(h('label.check', {}, box, h('span', {}, label)));
+      }
+      row.append(input);
     } else if (field.kind === 'textarea') {
       row.classList.add('stacked');
       input = h('textarea.input.area', { rows: 3, spellcheck: 'false', 'aria-label': field.title, placeholder: 'password1\npassword2' });

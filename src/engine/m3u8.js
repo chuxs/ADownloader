@@ -117,6 +117,18 @@ export function bestVariant(variants) {
   return [...variants].sort((a, b) => (b.height ?? 0) - (a.height ?? 0) || b.bandwidth - a.bandwidth)[0] ?? null;
 }
 
+/**
+ * The variant that best matches a wanted one (same size, then nearest
+ * bitrate). Playlists can change slightly between checks and downloads.
+ */
+export function closestVariant(variants, wanted) {
+  const score = (v) =>
+    Math.abs((v.height ?? 0) - (wanted.height ?? 0)) * 1e7 +
+    Math.abs((v.width ?? 0) - (wanted.width ?? 0)) * 1e7 +
+    Math.abs((v.bandwidth ?? 0) - (wanted.bandwidth ?? 0));
+  return [...variants].sort((a, b) => score(a) - score(b))[0] ?? null;
+}
+
 /** IV for AES-128 when the playlist gives none: the segment's sequence number. */
 export function sequenceIv(sequence) {
   const iv = Buffer.alloc(16);

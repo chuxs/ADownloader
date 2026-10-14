@@ -532,6 +532,57 @@ main > .view {
   flex-basis: 100%;
 }
 
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.check {
+  position: relative;
+  cursor: pointer;
+}
+
+.check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check span {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 15px;
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 12px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.check:hover span {
+  border-color: var(--surface-3);
+  color: var(--text);
+}
+
+.check input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+
+.check input:checked + span::before {
+  content: '✓';
+  margin-right: 6px;
+  font-weight: 700;
+}
+
+.check input:focus-visible + span {
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
 .input.area {
   flex: 1;
   height: auto;

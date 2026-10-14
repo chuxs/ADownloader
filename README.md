@@ -30,6 +30,7 @@ ADownloader is a desktop download manager modeled on [JDownloader 2](https://jdo
 - **Thumbnails** for videos: taken from the site, from the page's preview image, or grabbed from the finished file. Hover over one to see it larger.
 - **Numbered video folders:** after *N* videos (15 by default), ADownloader asks before continuing in "Folder 2", "Folder 3", and so on.
 - **Estimated sizes** for streams that don't report one (shown as `~470 MB`).
+- **Several qualities per video (optional):** the default is one file in the best quality. Optionally, you get one file for each quality you tick (4K, 1440p, 1080p, 720p, 480p, 360p, audio-only MP3), but only for qualities the video actually offers.
 
 ## What was not added (yet)
 
