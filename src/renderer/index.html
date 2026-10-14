@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: adl-thumb:; font-src 'self'"
+    />
+    <title>ADownloader</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <!-- title bar: logo, tabs; window buttons are drawn by the OS on the right -->
+      <header class="titlebar">
+        <div class="brand">
+          <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+            <defs>
+              <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#3b82f6" />
+                <stop offset="1" stop-color="#22d3ee" />
+              </linearGradient>
+            </defs>
+            <rect width="24" height="24" rx="6" fill="url(#lg)" />
+            <path d="M12 5.5v9M8 11l4 4 4-4M7 18.5h10" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          ADownloader
+        </div>
+        <nav class="tabs" role="tablist">
+          <button class="tab" role="tab" data-tab="downloads" aria-selected="true">
+            <span data-icon="download"></span>Downloads<span class="badge" id="badge-downloads"></span>
+          </button>
+          <button class="tab" role="tab" data-tab="grabber" aria-selected="false">
+            <span data-icon="link"></span>Link Grabber<span class="badge" id="badge-grabber"></span>
+          </button>
+          <button class="tab" role="tab" data-tab="settings" aria-selected="false">
+            <span data-icon="sliders"></span>Settings
+          </button>
+        </nav>
+      </header>
+
+      <!-- toolbars: one per tab, shown with its view -->
+      <div class="toolbar" data-for="downloads">
+        <button class="btn primary" id="btn-start"><span data-icon="play"></span>Start all</button>
+        <button class="btn" id="btn-stop"><span data-icon="stop"></span>Stop all</button>
+        <span class="sep"></span>
+        <button class="btn" data-action="add-links"><span data-icon="plus"></span>Add links</button>
+        <span class="sep"></span>
+        <button class="btn ghost" id="btn-dl-select"><span data-icon="checkSquare"></span><span>Select all</span></button>
+        <button class="btn danger-outline" id="btn-dl-remove" disabled><span data-icon="trash"></span><span>Remove</span></button>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="btn-remove-finished"><span data-icon="check"></span>Clear finished</button>
+        <span class="chip" id="chip-limit" title="Speed limit (change in Settings)"><span data-icon="gauge"></span><span></span></span>
+      </div>
+      <div class="toolbar" data-for="grabber" hidden>
+        <button class="btn" data-action="add-links"><span data-icon="plus"></span>Add links</button>
+        <button class="btn" id="btn-paste"><span data-icon="clipboard"></span>Paste</button>
+        <span class="sep"></span>
+        <button class="btn primary" id="btn-confirm-start"><span data-icon="download"></span>Start downloads</button>
+        <button class="btn" id="btn-confirm"><span data-icon="list"></span>Add to list</button>
+        <span class="sep"></span>
+        <button class="btn ghost" id="btn-grab-select"><span data-icon="checkSquare"></span><span>Select all</span></button>
+        <span class="spacer"></span>
+        <span class="paste-hint" title="Copy links anywhere, then press Ctrl+V in this window"><kbd>Ctrl</kbd> + <kbd>V</kbd> to paste links</span>
+        <span class="chip busy" id="chip-busy" hidden><span class="spinner"></span>Checking links…</span>
+        <button class="btn ghost danger" id="btn-clear-grabber"><span data-icon="trash"></span>Clear</button>
+      </div>
+      <div class="toolbar" data-for="settings" hidden>
+        <span class="dir">Changes are saved automatically.</span>
+      </div>
+
+      <main>
+        <section class="view downloads active" id="view-downloads">
+          <div class="list-head">
+            <span>Name</span><span class="cell num">Size</span><span>Progress</span><span class="cell num">Speed</span
+            ><span class="cell num">ETA</span><span>Status</span>
+          </div>
+          <div class="list" id="list-downloads" tabindex="0"></div>
+          <div class="empty" id="empty-downloads">
+            <span data-icon="download" data-class="big"></span>
+            <h2>No downloads yet</h2>
+            <p>Add links to get started. You can also paste with <kbd>Ctrl</kbd> + <kbd>V</kbd> or drop links on this window.</p>
+            <button class="btn primary" data-action="add-links"><span data-icon="plus"></span>Add links</button>
+          </div>
+        </section>
+
+        <section class="view grabber" id="view-grabber">
+          <div class="list-head">
+            <span>Name</span><span class="cell num">Size</span><span>Status</span><span>Folder / Website</span>
+          </div>
+          <div class="list" id="list-grabber" tabindex="0"></div>
+          <div class="empty" id="empty-grabber">
+            <span data-icon="link" data-class="big"></span>
+            <h2>Link Grabber is empty</h2>
+            <p>Links you add are checked here first. Review them, then start the downloads.</p>
+            <p class="paste-big"><kbd>Ctrl</kbd> + <kbd>V</kbd> to paste links, or drop them on this window</p>
+            <button class="btn primary" data-action="add-links"><span data-icon="plus"></span>Add links</button>
+          </div>
+        </section>
+
+        <section class="view" id="view-settings">
+          <div class="settings"><div class="settings-inner" id="settings-form"></div></div>
+        </section>
+      </main>
+
+      <footer class="statusbar">
+        <span class="item speed"><span data-icon="download"></span><span id="sb-speed">0 B/s</span></span>
+        <span class="item" id="sb-counts"></span>
+        <span class="spacer"></span>
+        <span class="item" id="sb-dir"><span data-icon="folder"></span><span></span></span>
+      </footer>
+    </div>
+
+    <dialog id="dlg-add">
+      <form method="dialog">
+        <header>
+          <h2>Add links</h2>
+          <p>Paste links, or any text that contains links.</p>
+        </header>
+        <div class="body">
+          <textarea name="text" placeholder="https://example.com/file.zip" spellcheck="false" required></textarea>
+          <label
+            >Save to
+            <div class="row-inline">
+              <input class="input path" name="directory" spellcheck="false" />
+              <button class="btn" type="button" id="dlg-browse"><span data-icon="folder"></span>Browse</button>
+            </div>
+          </label>
+          <label>Package name (optional)<input class="input" name="packageName" placeholder="Detected automatically" /></label>
+        </div>
+        <footer>
+          <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+          <button class="btn primary" value="ok"><span data-icon="plus"></span>Add links</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-prompt" class="prompt">
+      <form method="dialog">
+        <header>
+          <h2 id="prompt-title"></h2>
+          <p id="prompt-message"></p>
+          <p class="detail" id="prompt-detail"></p>
+        </header>
+        <footer>
+          <button class="btn ghost" value="cancel" id="prompt-cancel"></button>
+          <button class="btn primary" value="ok" id="prompt-ok" autofocus></button>
+        </footer>
+      </form>
+    </dialog>
+
+    <div class="toasts" id="toasts"></div>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "adownloader",
+  "version": "0.1.0",
+  "description": "Download manager built with Electron",
+  "private": true,
+  "type": "module",
+  "main": "src/main/main.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node scripts/start.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "download": "node scripts/download.js",
+    "grab": "node scripts/grab.js"
+  },
+  "devDependencies": {
+    "electron": "^44.7.1"
+  }
+}
