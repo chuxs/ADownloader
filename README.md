@@ -62,7 +62,7 @@ Optional, detected automatically:
 ### Install and run
 
 ```bash
-git clone <this repository>
+git clone https://github.com/chuxs/ADownloader.git
 cd ADownloader
 npm install
 npm start
