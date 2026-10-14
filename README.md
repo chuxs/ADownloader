@@ -68,6 +68,21 @@ npm install
 npm start
 ```
 
+### Build an installer (Windows)
+
+```bash
+npm run dist
+```
+
+This creates two files in `dist/`:
+
+| File | What it is |
+|---|---|
+| `ADownloader-Setup-<version>.exe` | Installer: lets you choose the install folder, and adds Start menu and desktop shortcuts and an uninstaller |
+| `ADownloader-Portable-<version>.exe` | Single file that runs without installing |
+
+The files are not code-signed, so Windows SmartScreen may warn the first time ("More info" → "Run anyway"). The app icon comes from `build/icon.svg`; after changing it, run `npm run icon`.
+
 ### Using it
 
 1. Copy one or more links and press **Ctrl+V** in the window, or click **Add links**.

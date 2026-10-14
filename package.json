@@ -12,9 +12,45 @@
     "start": "node scripts/start.js",
     "test": "node --test \"test/**/*.test.js\"",
     "download": "node scripts/download.js",
-    "grab": "node scripts/grab.js"
+    "grab": "node scripts/grab.js",
+    "icon": "node scripts/make-icon.js",
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.adownloader.app",
+    "productName": "ADownloader",
+    "copyright": "ADownloader",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ADownloader",
+      "artifactName": "ADownloader-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "ADownloader-Portable-${version}.${ext}"
+    }
   },
   "devDependencies": {
-    "electron": "^44.7.1"
+    "electron": "^44.7.1",
+    "electron-builder": "^26.15.3"
   }
 }

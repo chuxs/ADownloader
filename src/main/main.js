@@ -55,7 +55,11 @@ if (!app.requestSingleInstanceLock()) {
     win = createWindow();
     startStatePush(core, () => win);
     if (core.settings.get('startOnLaunch')) core.scheduler.start();
-    if (process.env.ADL_SCREENSHOT_DIR) captureTabs(win, process.env.ADL_SCREENSHOT_DIR);
+    if (process.env.ADL_SCREENSHOT_DIR) {
+      captureTabs(win, process.env.ADL_SCREENSHOT_DIR)
+        .catch((err) => console.error('screenshot run failed:', err.message))
+        .finally(() => app.quit()); // never leave the app running after a failed step
+    }
   });
 
   app.on('window-all-closed', () => app.quit());
